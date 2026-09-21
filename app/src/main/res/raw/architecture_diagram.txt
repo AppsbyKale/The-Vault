@@ -1,0 +1,452 @@
+# TheNobberyVault - Architecture Diagram
+
+## File Dependency Graph
+
+MainActivity.kt (Entry Point)
+    ├─→ creates & uses: VaultViewModel.kt (State Management)
+    ├─→ displays: LibraryScreen.kt (Main UI)
+    └─→ imports: Theme.kt (UI Theme)
+
+VaultViewModel.kt (State Management)
+    ├─→ accesses: AssetDao.kt (Database Queries)
+    ├─→ works with: Asset.kt (Data Model)
+    ├─→ uses: AssetDefinitions.kt (Enums & Constants)
+    └─→ manages: BulkImportWorker.kt (Background Tasks)
+
+AssetDao.kt (Database Queries)
+    └─→ queries: VaultDatabase.kt (Room Database)
+
+VaultDatabase.kt (Room Database)
+    └─→ stores: Asset.kt (Data Model)
+
+LibraryScreen.kt (Main UI)
+    ├─→ displays: Asset.kt
+    ├─→ uses: AssetDefinitions.kt
+    ├─→ applies: Theme.kt
+    ├─→ contains: AssetRow.kt (List Item)
+    ├─→ contains: LibraryTopBar.kt (Search & Sort)
+    ├─→ contains: LibraryDialogDispatcher.kt (Dialog Router)
+    ├─→ contains: CollectionStatsDialog.kt (Collection Stats)
+    ├─→ contains: NewImportsDialog.kt (New Import Scanner)
+    ├─→ contains: LinkPickerDialog.kt (Linking UI)
+    ├─→ contains: MergePickerSheet.kt (Merge UI)
+    ├─→ contains: ExportDispatcher.kt (Export Logic)
+    └─→ contains: WatermarkStudioDialog.kt (Watermark Editor)
+
+LibraryDialogDispatcher.kt (Dialog Router)
+    ├─→ manages: VaultActionMenu.kt (Context Menu)
+    ├─→ manages: AssetProfileDialog.kt (Profile View)
+    ├─→ manages: ExportDispatcher.kt (Export Dialog)
+    ├─→ manages: WatermarkStudioDialog.kt (Studio Dialog)
+    ├─→ manages: LinkPickerDialog.kt (Link Dialog)
+    ├─→ manages: MergePickerSheet.kt (Merge Dialog)
+    └─→ manages: DeleteWarningDialog.kt (Delete Dialog)
+
+LibraryTopBar.kt (Settings Menu)
+    ├─→ contains: "COLLECTION STATS" menu item → opens CollectionStatsDialog
+    └─→ contains: "NEW IMPORTS" menu item → opens NewImportsDialog
+
+CollectionStatsDialog.kt (Collection Stats)
+    ├─→ displays: CollectionStats (computed from database)
+    ├─→ shows: Total Assets, Total Files, Top Categories, Collections, Tags
+    ├─→ actions: Export to TXT, Export to CSV
+    └─→ accessed via: Settings menu → "COLLECTION STATS"
+
+NewImportsDialog.kt (New Import Scanner)
+    ├─→ scans: Documents/Infinite Painter/Projects folder
+    ├─→ scans: Pictures/Infinite Painter folder
+    ├─→ shows: NewImportProject rows with approve/deny
+    ├─→ displays: File type indicators (B=Background, T=Transparent, IP=Infinite Painter)
+    ├─→ actions: DENY ALL, ACCEPT ALL, Refresh
+    └─→ accessed via: Settings menu → "NEW IMPORTS"
+
+ExportDispatcher.kt (Export Dialog)
+    ├─→ displays: Asset.kt
+    ├─→ triggers: WatermarkStudioDialog (when watermark enabled)
+    └─→ callbacks: onExportToDevice, onShareSheet, onLaunchWatermarkStudio
+
+WatermarkStudioDialog.kt (Watermark Editor)
+    ├─→ displays: Asset.kt preview
+    ├─→ uses: WatermarkPreferenceManager (persistence)
+    └─→ callback: onFinalize (returns opacity, scale, offset)
+
+Theme.kt (UI Theme)
+    ├─→ extends: Color.kt
+    ├─→ extends: Type.kt
+    └─→ extends: Shapes.kt
+
+## Layer Architecture
+
+🎨 UI LAYER
+├── MainActivity.kt (Entry Point)
+├── LibraryScreen.kt (Main Screen)
+├── UI Components
+│   ├── AssetRow.kt
+│   ├── LinkPickerDialog.kt
+│   ├── MergePickerSheet.kt
+│   ├── ExportDispatcher.kt
+│   ├── WatermarkStudioDialog.kt
+│   ├── LibraryDialogDispatcher.kt
+│   ├── LibraryTopBar.kt
+│   ├── CollectionStatsDialog.kt (Collection Stats)
+│   ├── NewImportsDialog.kt (New Import Scanner)
+│   ├── menus/
+│   │   ├── VaultActionMenu.kt
+│   │   └── DeleteWarningDialog.kt
+│   ├── profiledialog/
+│   │   ├── AssetProfileDialog.kt
+│   │   ├── FullScreenPreviewDialog.kt
+│   │   ├── LinksTab.kt
+│   │   ├── OrganizationTab.kt
+│   │   └── ProfileTab.kt
+│   └── components/
+│       └── AssetComponents.kt
+└── Theme & Styling
+    ├── Theme.kt
+    ├── Color.kt
+    ├── Type.kt
+    └── Shapes.kt
+         ↓
+⚙️ VIEWMODEL LAYER
+├── VaultViewModel.kt (State Management)
+└── BulkImportWorker.kt (Background Tasks)
+         ↓
+💾 DATA LAYER
+├── AssetDao.kt (Database Access)
+├── VaultDatabase.kt (Room Database)
+└── Asset.kt (Entity Model)
+         ↓
+🛠️ UTILITIES
+├── organization/
+│   └── AssetDefinitions.kt (Constants & Enums)
+├── BackupUtils.kt
+├── BitmapUtils.kt
+├── BulkImportEngine.kt
+├── BulkImportWorker.kt (Background Tasks)
+├── DiagramExporter.kt
+├── FileClassifier.kt
+├── FileExportUtils.kt (Export Utilities)
+├── FileNameSanitizer.kt
+└── WatermarkPreferenceManager.kt
+
+## Data Flow
+
+User Input (MainActivity)
+         ↓
+   VaultViewModel (Process)
+         ↓
+   AssetDao (Query/Update)
+         ↓
+   VaultDatabase (Execute)
+         ↓
+   Asset (Store/Retrieve)
+         ↓
+   VaultViewModel (Emit StateFlow)
+         ↓
+   LibraryScreen (Render UI)
+         ↓
+   User sees updated UI
+
+## Export & Watermark Flow
+
+User long-presses Asset
+         ↓
+   VaultActionMenu appears
+         ↓
+   User taps "EXPORT / SHARE"
+         ↓
+   ExportDispatcher opens
+   (UPDATED: Single file selection dropdown)
+         │
+         ├─ User selects file from dropdown
+         │  (Background PNG | Transparent PNG | .pntr)
+         │
+         ├─ useWatermark = FALSE (default)
+         │   ├─ User taps SAVE → onExportToDevice(asset, [selectedType], false)
+         │   └─ User taps SHARE → onShareSheet(asset, [selectedType], false)
+         │
+         └─ useWatermark = TRUE
+             ├─ Shows warning: "⚠ Watermark will be applied to the selected file"
+             ├─ User taps SAVE → onLaunchWatermarkStudio(asset, [selectedType], "device")
+             │                    ↓
+             │            Export dialog dismissed
+             │                    ↓
+             │            WatermarkStudioDialog opens
+             │            (previews CORRECT file based on selectedType)
+             │                    ↓
+             │            User adjusts watermark
+             │            (opacity & scale sliders)
+             │                    ↓
+             │            User drags watermark on preview
+             │                    ↓
+             │            User taps CHECK (✓)
+             │                    ↓
+             │            onFinalize(opacity, scale, offset)
+             │                    ↓
+             │            File export happens with watermark applied
+             │
+             └─ User taps SHARE → onLaunchWatermarkStudio(asset, [selectedType], "share")
+                                   ↓
+                           Same flow as above
+                                   ↓
+                           Share menu appears with watermarked file
+
+Key Changes:
+  ✓ ExportDispatcher: Changed from checkboxes to single dropdown
+  ✓ Only one file can be exported per action (no multiple selections)
+  ✓ Dropdown shows only available files for asset
+  ✓ Warning note appears when watermark is enabled
+  ✓ WatermarkStudioDialog now receives selectedFileType parameter
+  ✓ Studio previews the CORRECT file (background/transparent/.pntr)
+  ✓ Fixes issue where transparent files only showed watermark
+
+## File Locations
+
+Source Files Location:
+/app/src/main/java/com/example/thenobbery/
+
+Structure:
+├── MainActivity.kt
+├── data/
+│   ├── Asset.kt
+│   ├── AssetDao.kt
+│   └── VaultDatabase.kt
+├── viewmodels/
+│   └── VaultViewModel.kt
+├── ui/
+│   ├── screens/
+│   │   ├── LibraryScreen.kt
+│   │   ├── AssetRow.kt
+│   │   ├── LinkPickerDialog.kt
+│   │   ├── MergePickerSheet.kt
+│   │   ├── ExportDispatcher.kt
+│   │   ├── WatermarkStudioDialog.kt
+│   │   ├── LibraryDialogDispatcher.kt
+│   │   ├── LibraryTopBar.kt
+│   │   ├── CollectionStatsDialog.kt (Collection Stats)
+│   │   ├── NewImportsDialog.kt (New Import Scanner)
+│   │   ├── menus/
+│   │   │   ├── DeleteWarningDialog.kt
+│   │   │   └── VaultActionMenu.kt
+│   │   └── profiledialog/
+│   │       ├── AssetProfileDialog.kt
+│   │       ├── FullScreenPreviewDialog.kt
+│   │       ├── LinksTab.kt
+│   │       ├── OrganizationTab.kt
+│   │       └── ProfileTab.kt
+│   ├── components/
+│   │   └── AssetComponents.kt
+│   └── theme/
+│       ├── Theme.kt
+│       ├── Color.kt
+│       ├── Type.kt
+│       └── Shapes.kt
+├── logic/
+│   ├── BackupUtils.kt
+│   ├── BitmapUtils.kt
+│   ├── BulkImportEngine.kt
+│   ├── BulkImportWorker.kt
+│   ├── DiagramExporter.kt
+│   ├── FileClassifier.kt
+│   ├── FileExportUtils.kt
+│   ├── FileNameSanitizer.kt
+│   ├── WatermarkPreferenceManager.kt
+│   └── organization/
+│       └── AssetDefinitions.kt
+└── tests/
+    ├── ExampleInstrumentedTest.kt
+    └── ExampleUnitTest.kt
+
+## Key Relationships
+
+File A                    Relationship          File B
+─────────────────────────────────────────────────────────
+MainActivity            creates & uses         VaultViewModel
+MainActivity            displays               LibraryScreen
+VaultViewModel          manages data from      AssetDao
+VaultViewModel          works with             Asset
+LibraryScreen           receives data from     VaultViewModel
+LibraryScreen           uses entities from     Asset
+AssetDao                queries/updates        VaultDatabase
+VaultDatabase           stores                 Asset
+AssetRow                displays               Asset
+All Screens             use                    Theme
+All UI Components       apply                  Theme & Styling
+
+## Import Chain
+
+MainActivity.kt
+├── com.example.thenobbery.ui.screens.LibraryScreen
+├── com.example.thenobbery.viewmodels.VaultViewModel
+├── com.example.thenobbery.ui.theme.NobberyVaultTheme
+└── com.example.thenobbery.logic.FileExportUtils
+
+VaultViewModel.kt
+├── com.example.thenobbery.data.VaultDatabase
+├── com.example.thenobbery.data.Asset
+├── com.example.thenobbery.logic.organization.AssetDefinitions
+└── com.example.thenobbery.logic.BulkImportWorker
+
+LibraryScreen.kt
+├── com.example.thenobbery.data.Asset
+├── com.example.thenobbery.logic.AssetDefinitions
+├── com.example.thenobbery.ui.theme.*
+└── All dialog/component imports
+
+AssetDao.kt
+└── Room Framework
+    ├── androidx.room.*
+    └── Queries VaultDatabase
+
+VaultDatabase.kt
+└── Room Framework
+    ├── androidx.room.*
+    ├── Stores Asset entities
+    └── Handles migrations
+
+## Component Responsibilities
+
+┌──────────────────────────────┐
+│      MainActivity            │
+│  - App entry point           │
+│  - Creates ViewModel         │
+│  - Displays LibraryScreen    │
+│  - Handles file intents      │
+└──────────────────────────────┘
+           ↓
+┌──────────────────────────────┐
+│     VaultViewModel           │
+│  - Manages Assets StateFlow  │
+│  - Handles search/sort logic │
+│  - Coordinates imports       │
+│  - Manages asset CRUD ops    │
+│  - Handles linking/merging   │
+└──────────────────────────────┘
+           ↓
+┌──────────────────────────────┐
+│      LibraryScreen           │
+│  - Displays asset list       │
+│  - Manages dialog states     │
+│  - Handles user interactions │
+│  - Routes actions to VM      │
+└──────────────────────────────┘
+           ↓
+┌──────────────────────────────┐
+│LibraryDialogDispatcher       │
+│  - Routes all dialogs        │
+│  - Manages export flow       │
+│  - Coordinates watermark     │
+│  - Handles state transitions │
+└──────────────────────────────┘
+           ↓
+┌──────────────────────────────┐
+│   UI Components & Dialogs    │
+│  - VaultActionMenu           │
+│  - AssetProfileDialog        │
+│  - ExportDispatcher          │
+│  - WatermarkStudioDialog     │
+│  - LinkPickerDialog          │
+│  - MergePickerSheet          │
+│  - DeleteWarningDialog       │
+└──────────────────────────────┘
+           ↓
+┌──────────────────────────────┐
+│  AssetDao & VaultDatabase    │
+│  - Query & update assets     │
+│  - Manage relationships      │
+│  - Handle migrations         │
+└──────────────────────────────┘
+           ↓
+┌──────────────────────────────┐
+│      Asset Entity            │
+│  - Core data model           │
+│  - Stored in Room Database   │
+│  - Contains all asset info   │
+└──────────────────────────────┘
+
+## Watermark Studio Integration
+
+ExportDispatcher Features:
+  ✓ useWatermark toggle (default: OFF)
+  ✓ Checkbox: "Apply Watermark" + "PNG files only" note
+  ✓ SAVE button → Export or launch studio
+  ✓ SHARE button → Share or launch studio
+
+WatermarkStudioDialog Features:
+  ✓ Full-screen asset preview (background/main preview/transparent)
+  ✓ Draggable watermark layer
+  ✓ Opacity slider (0-100%)
+  ✓ Scale slider (0-100%)
+  ✓ Settings persisted via WatermarkPreferenceManager
+  ✓ Close button (✕) - cancels export
+  ✓ Check button (✓) - finalizes and proceeds to export/share
+
+LibraryDialogDispatcher Watermark Flow:
+  1. Export dialog opened with useWatermark = FALSE (default)
+  2. User toggles watermark ON and taps SAVE/SHARE
+  3. ExportDispatcher calls onLaunchWatermarkStudio(asset, types, action)
+  4. Export dialog dismissed
+  5. WatermarkStudioDialog opens with asset preview
+  6. User adjusts opacity, scale, and position
+  7. User taps CHECK (✓)
+  8. onFinalize callback → stores watermark settings
+  9. Pending action ("device" or "share") executes
+  10. TODO: Apply watermark to selected PNG files
+  11. File picker (export) or share menu (share) appears
+  12. Dialog closes, state cleaned up
+
+State Management:
+  - studioLaunchedAsset: Current asset in studio
+  - pendingExportAction: "device" or "share"
+  - pendingExportTypes: Selected file types to export
+  - WatermarkPreferenceManager: Persists opacity, scale, last used settings
+
+## Generated: March 25, 2026
+## Project: TheNobberyVault
+## Architecture: MVVM with Jetpack Compose
+
+## Recent Changes (March 25, 2026)
+
+### Added: Collection Stats System
+- Added CollectionStatsDialog.kt (contains CollectionStatsDialog composable)
+- Displays collection statistics: Total Assets, Total Files, Top Categories, Collections, Tags
+- Accessible via Settings menu → "COLLECTION STATS"
+- Stats are computed dynamically from database
+- Dialog height reduced to 50% screen height for better UX
+
+### Added: New Imports System
+- Added NewImportsDialog.kt
+- Scans Documents/Infinite Painter/Projects for .pntr files
+- Scans Pictures/Infinite Painter for matching PNG files
+- Shows new projects with file type indicators (B, T, IP)
+- Actions: DENY ALL, ACCEPT ALL, Refresh
+- Auto-scans on dialog open
+- Compares against existing assets and denied titles
+
+### Fixed: Category Display & Search
+- AssetRow now displays classification/category (gold color) next to title
+- Search now includes: title, tags, classification, collections
+- Previously only searched title and tags
+
+### Removed: Collection Backup/Restore System
+- Removed CollectionBackupManager.kt (backup/import collection logic)
+- Removed export/import collection dialogs from LibraryScreen.kt
+- Removed "EXPORT COLLECTION" and "IMPORT COLLECTION" menu items from settings
+
+## Proposed Changes (Not Yet Implemented)
+
+### New Import System Improvements
+1. **Deny Behavior Change**:
+   - TAP deny = hide for session only (not permanent)
+   - LONG PRESS deny = add to permanent ban list
+   - Ban list view accessible via icon next to refresh button
+   
+2. **Collection File Type Checking**:
+   - Current: Checks if title exists, skips entire project if found
+   - Proposed: Check which file types already exist in collection
+   - Import missing file types to existing asset instead of skipping
+
+### Missing from Collection (Android/data access issue)
+- Cannot access Android/data/com.brakefield.painter/ without root
+- Pivot: Changed to Collection Stats system instead
+- May revisit if user gains root access
